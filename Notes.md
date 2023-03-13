@@ -1,0 +1,1 @@
+Prefer `cargo check` over `cargo build` as it is faster than building the full executable
