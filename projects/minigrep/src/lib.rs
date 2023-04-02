@@ -1,9 +1,11 @@
 use std::error::Error;
-use std::{fs, vec};
+use std::fs;
+use std::env;
 
 pub struct Config {
     query: String,
     file_path: String,
+    ignore_case: bool,
 }
 
 impl Config {
@@ -14,8 +16,9 @@ impl Config {
 
         let query = args[1].clone();
         let file_path = args[2].clone();
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
 
-        Ok(Config { query, file_path })
+        Ok(Config { query, file_path, ignore_case })
     }
 
 }
@@ -23,23 +26,30 @@ impl Config {
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     let contents = fs::read_to_string(config.file_path)?;
 
-    for line in search(&config.query, &contents) {
+    for line in search(&config.query, &contents, config.ignore_case) {
         println!("{line}")
     }
 
     Ok(())
 }
 
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let mut string_matches = vec![];
+pub fn search<'a>(query: &str, contents: &'a str, case_insensitive: bool) -> Vec<&'a str> {
 
-    for line in contents.lines() {
-        if line.contains(query) {
-            string_matches.push(line);
-        }
-    }
-    
-    string_matches
+    let query = if case_insensitive {
+        query.to_lowercase()
+    } else {
+        query.to_string()
+    };
+
+    contents
+        .lines()
+        .filter(|line| 
+            match case_insensitive {
+                true => line.to_lowercase().contains(&query),
+                false => line.contains(&query)
+            })
+        .collect()
+ 
 }
 
 #[cfg(test)]
@@ -47,14 +57,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn one_result() {
+    fn case_sensitive() {
         let query = "duct";
         let contents = "\
 Rust:
 safe, fast, productive.
-Pick three.";
+Pick three.
+Duct";
 
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
+        assert_eq!(vec!["safe, fast, productive."], search(query, contents, false));
+    }
+
+    #[test]
+    fn case_insensitive() {
+        let query = "RuSt";
+        let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.
+Trust me.";
+
+        assert_eq!(
+            vec!["Rust:", "Trust me."], 
+            search(query, contents, true)
+        );
     }
 
 }
